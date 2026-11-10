@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Board } from "@/components/board"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DISCLAIMER, DOMAINS, FEATURED_QUESTIONS, domainLabel } from "@/lib/why/content"
+import { ANY_WORD_PROMPTS, DISCLAIMER, DOMAINS, FEATURED_QUESTIONS, domainLabel } from "@/lib/why/content"
 import { CACHE_SCORE, buildTranscript, matchSeed } from "@/lib/why/match"
 import { seeds } from "@/lib/why/seeds"
 import type { Scene } from "@/lib/why/schema"
@@ -29,7 +29,9 @@ type Session = {
   fromCache: boolean
   askedAt: number
   error?: string
+  errorHint?: "spelling" | "refused" | "invalid"
   suggestions: string[]
+  source?: string
 }
 
 export function WhyApp() {
@@ -174,6 +176,7 @@ export function WhyApp() {
                   domain: data.domain,
                   jurisdictionNote: data.jurisdictionNote,
                   fromCache: Boolean(data.fromCache),
+                  source: data.source ?? current.source,
                 }
               : current,
           )
@@ -186,6 +189,7 @@ export function WhyApp() {
           const data = item.data as {
             followUps: string[]
             jurisdictionNote?: string
+            source?: string
           }
           completeRef.current = true
           setSession((current) =>
@@ -194,15 +198,22 @@ export function WhyApp() {
                   ...current,
                   followUps: data.followUps,
                   jurisdictionNote: data.jurisdictionNote ?? current.jurisdictionNote,
+                  source: data.source ?? current.source,
                 }
               : current,
           )
         } else if (item.event === "error") {
-          const data = item.data as { message: string; suggestions: string[] }
+          const data = item.data as {
+            message: string
+            suggestions: string[]
+            hint?: "spelling" | "refused" | "invalid"
+          }
           failedRef.current = true
           completeRef.current = true
           setSession((current) =>
-            current ? { ...current, error: data.message, suggestions: data.suggestions, followUps: [] } : current,
+            current
+              ? { ...current, error: data.message, errorHint: data.hint, suggestions: data.suggestions, followUps: [] }
+              : current,
           )
           setStatus("error")
         }
@@ -346,7 +357,7 @@ export function WhyApp() {
   const scene = scenes[index] ?? null
   const caption =
     scene?.caption ??
-    (status === "loading" ? "Sketching the first strokes…" : "Captions sit here while the chalk moves.")
+    (status === "loading" ? "Looking the word up…" : "Captions sit here while the chalk moves.")
   const followUps = session?.error ? session.suggestions : (session?.followUps ?? [])
   const transcript = scenes.length ? buildTranscript(scenes, session?.jurisdictionNote) : ""
 
@@ -358,7 +369,7 @@ export function WhyApp() {
           <h1 className="font-chalk -rotate-1 text-6xl leading-none text-[#f6f1e4] sm:text-7xl">Why</h1>
         </div>
         <p className="max-w-xs font-hand text-xl leading-snug text-[#f6f1e4]/85 sm:text-right">
-          A thirty-second chalkboard for a term you just heard.
+          A thirty-second chalkboard for any word.
         </p>
       </header>
 
@@ -376,7 +387,7 @@ export function WhyApp() {
           id="question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="What is a liquidity pool?"
+          placeholder="Try photosynthesis, or any word"
           autoComplete="off"
           data-testid="ask-input"
           className="h-12 flex-1 border-white/30 bg-black/25 px-4 font-hand text-lg text-[#f6f1e4] placeholder:text-[#f6f1e4]/40"
@@ -385,6 +396,23 @@ export function WhyApp() {
           Draw it
         </Button>
       </form>
+
+      <div className="mt-5">
+        <p className="font-hand text-lg text-[#f3e29a]">Any word</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {ANY_WORD_PROMPTS.map((item) => (
+            <Button
+              key={item}
+              type="button"
+              variant="outline"
+              onClick={() => ask(item)}
+              className="h-auto rounded-full border-white/30 bg-transparent px-3 py-1.5 font-hand text-base whitespace-normal text-[#f6f1e4] hover:bg-white/10"
+            >
+              {item}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {DOMAINS.map((domain) => (
@@ -426,7 +454,7 @@ export function WhyApp() {
             elapsedMs={elapsed}
             reducedMotion={reduced}
             message={
-              status === "loading" ? "Sketching…" : status === "error" ? session?.error : undefined
+              status === "loading" ? "Looking it up…" : status === "error" ? session?.error : undefined
             }
           />
         </div>
@@ -488,7 +516,9 @@ export function WhyApp() {
 
       {followUps.length > 0 ? (
         <section className="mt-6" data-testid="followups">
-          <h2 className="font-hand text-2xl text-[#f3e29a]">{session?.error ? "Checked questions" : "Ask next"}</h2>
+          <h2 className="font-hand text-2xl text-[#f3e29a]">
+            {session?.errorHint === "spelling" ? "Did you mean" : session?.error ? "Try another word" : "Ask next"}
+          </h2>
           <div className="mt-2 flex flex-col items-start gap-2">
             {followUps.map((item) => (
               <Button
@@ -516,13 +546,17 @@ export function WhyApp() {
             ))}
           </ol>
           {session?.jurisdictionNote ? <p className="mt-3 text-[#f0c59a]">{session.jurisdictionNote}</p> : null}
+          {session?.source ? <p className="mt-3 text-sm text-[#9fd4e2]">Source: {session.source}</p> : null}
         </section>
       ) : null}
 
       <details className="mt-8 max-w-3xl">
         <summary className="cursor-pointer font-hand text-xl text-[#f6f1e4]">
-          The checked shelf · {seeds.length} explainers
+          Hand-checked shelf · {seeds.length} explainers
         </summary>
+        <p className="mt-2 text-sm text-[#f6f1e4]/70">
+          These are written by hand. Any other word is quoted from a dictionary or encyclopedia, and the transcript names the source.
+        </p>
         <div className="mt-4 grid gap-6 sm:grid-cols-2">
           {DOMAINS.map((domain) => (
             <div key={domain.id}>

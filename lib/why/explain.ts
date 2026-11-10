@@ -1,4 +1,6 @@
 import { ASK, DISCLAIMER, FEATURED_QUESTIONS } from "@/lib/why/content"
+import { lookupTerm, planFromGlossary, sourceLine, type LookupResult } from "@/lib/why/glossary"
+import { refusalFor } from "@/lib/why/guard"
 import { llmConfig, streamChat, type LlmConfig } from "@/lib/why/llm"
 import { buildTranscript, CACHE_SCORE, matchSeed } from "@/lib/why/match"
 import { SceneStreamParser } from "@/lib/why/stream"
@@ -14,6 +16,7 @@ export type ExplainEvent =
         jurisdictionNote?: string
         fromCache: boolean
         id?: string
+        source?: string
       }
     }
   | { event: "scene"; data: Scene & { index: number } }
@@ -24,20 +27,30 @@ export type ExplainEvent =
         transcript: string
         disclaimer: string
         jurisdictionNote?: string
+        source?: string
       }
     }
-  | { event: "error"; data: { message: string; suggestions: string[] } }
+  | { event: "error"; data: { message: string; suggestions: string[]; hint?: "spelling" | "refused" | "invalid" } }
+
+export type ExplainDeps = {
+  lookup?: (question: string) => Promise<LookupResult>
+  llm?: LlmConfig | null
+}
 
 const suggestions = [...FEATURED_QUESTIONS].slice(0, 3)
 
-export async function* explain(question: string): AsyncGenerator<ExplainEvent> {
+export async function* explain(question: string, deps?: ExplainDeps): AsyncGenerator<ExplainEvent> {
   const trimmed = question.trim().replace(/\s+/g, " ")
   if (!trimmed) {
-    yield error("Type a question first.", suggestions)
+    yield error("Type a question first.", suggestions, "invalid")
     return
   }
   if (trimmed.length > 240) {
-    yield error("Ask it in one short sentence.", suggestions)
+    yield error("Ask it in one short sentence.", suggestions, "invalid")
+    return
+  }
+  if (refusalFor(trimmed)) {
+    yield error("I won't draw that. Try a different word.", [], "refused")
     return
   }
 
@@ -47,9 +60,12 @@ export async function* explain(question: string): AsyncGenerator<ExplainEvent> {
     return
   }
 
-  const config = llmConfig()
+  const lookup = deps?.lookup ?? lookupTerm
+  const found = await lookup(trimmed)
+  const config = deps && "llm" in deps ? deps.llm : llmConfig()
+
   if (config) {
-    yield* fromLlm(trimmed, config)
+    yield* fromLlm(trimmed, config, found)
     return
   }
 
@@ -58,13 +74,22 @@ export async function* explain(question: string): AsyncGenerator<ExplainEvent> {
     return
   }
 
+  if (found.entry) {
+    const plan = planFromGlossary(found.entry, trimmed)
+    yield* fromPlan(plan, sourceLine(found.entry))
+    return
+  }
+
   yield error(
-    "That one is not on the checked shelf yet. Pick a question below, or add an LLM key to sketch new ones.",
-    suggestions,
+    found.suggestions.length
+      ? `I couldn't find “${trimmed}” in the dictionary or encyclopedia.`
+      : `I couldn't find “${trimmed}”. Check the spelling, or try another word.`,
+    found.suggestions,
+    "spelling",
   )
 }
 
-async function* fromPlan(plan: ScenePlan): AsyncGenerator<ExplainEvent> {
+async function* fromPlan(plan: ScenePlan, source?: string): AsyncGenerator<ExplainEvent> {
   yield {
     event: "meta",
     data: {
@@ -72,25 +97,33 @@ async function* fromPlan(plan: ScenePlan): AsyncGenerator<ExplainEvent> {
       title: plan.title,
       domain: plan.domain,
       jurisdictionNote: plan.jurisdictionNote,
-      fromCache: true,
+      fromCache: !source,
       id: plan.id,
+      source,
     },
   }
   for (let index = 0; index < plan.scenes.length; index += 1) {
     yield { event: "scene", data: { ...plan.scenes[index], index } }
   }
+  const spoken = buildTranscript(plan.scenes, plan.jurisdictionNote)
   yield {
     event: "done",
     data: {
       followUps: plan.followUps,
-      transcript: buildTranscript(plan.scenes, plan.jurisdictionNote),
-      disclaimer: DISCLAIMER,
+      transcript: source ? `${spoken} Source: ${source}.` : spoken,
+      disclaimer: plan.jurisdictionNote ?? DISCLAIMER,
       jurisdictionNote: plan.jurisdictionNote,
+      source,
     },
   }
 }
 
-async function* fromLlm(question: string, config: LlmConfig): AsyncGenerator<ExplainEvent> {
+async function* fromLlm(question: string, config: LlmConfig, found?: LookupResult): AsyncGenerator<ExplainEvent> {
+  const grounding = found?.entry
+    ? `Source: ${sourceLine(found.entry)}\nDefinition: ${found.entry.definition}\nExample: ${found.entry.example ?? "none given"}`
+    : found?.suggestions.length
+      ? `No dictionary entry. Possible spellings: ${found.suggestions.join(", ")}. Do not pretend a spelling you were not given.`
+      : "No dictionary entry was found. Only say what you are sure of, and say when you are not."
   const parser = new SceneStreamParser()
   let title = "A quick chalkboard"
   let domain = "general"
@@ -109,7 +142,7 @@ async function* fromLlm(question: string, config: LlmConfig): AsyncGenerator<Exp
   }
 
   try {
-    for await (const chunk of streamChat(config, question)) {
+    for await (const chunk of streamChat(config, question, undefined, grounding)) {
       for (const parsed of parser.push(chunk)) {
         if (parsed.type === "meta") {
           title = parsed.title
@@ -126,30 +159,45 @@ async function* fromLlm(question: string, config: LlmConfig): AsyncGenerator<Exp
       }
     }
   } catch {
-    yield error("The sketching model did not answer. The checked shelf still works.", suggestions)
+    if (!metaSent && found?.entry) {
+      yield* fromPlan(planFromGlossary(found.entry, question), sourceLine(found.entry))
+      return
+    }
+    yield error("The sketching model did not answer. A dictionary chalk drawing may still work.", suggestions)
     return
   }
 
   if (scenes.length < 4) {
-    yield error("I could not finish a full chalkboard for that. Try a checked question.", suggestions)
+    if (!metaSent && found?.entry) {
+      yield* fromPlan(planFromGlossary(found.entry, question), sourceLine(found.entry))
+      return
+    }
+    yield error("I could not finish a full chalkboard for that.", suggestions)
     return
   }
 
   const usableFollowUps =
     followUps.length >= 2 ? followUps.slice(0, 3) : [ASK.pool, ASK.holding, ASK.apr]
+  const source = found?.entry ? sourceLine(found.entry) : undefined
+  const spoken = buildTranscript(scenes, jurisdictionNote)
   yield {
     event: "done",
     data: {
       followUps: usableFollowUps,
-      transcript: buildTranscript(scenes, jurisdictionNote),
-      disclaimer: DISCLAIMER,
+      transcript: source ? `${spoken} Source: ${source}.` : spoken,
+      disclaimer: jurisdictionNote ?? DISCLAIMER,
       jurisdictionNote,
+      source,
     },
   }
 }
 
-function error(message: string, items: string[]): ExplainEvent {
-  return { event: "error", data: { message, suggestions: items } }
+function error(
+  message: string,
+  items: string[],
+  hint?: "spelling" | "refused" | "invalid",
+): ExplainEvent {
+  return { event: "error", data: { message, suggestions: items, hint } }
 }
 
 export function toSse(events: AsyncGenerator<ExplainEvent>): Response {

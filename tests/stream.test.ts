@@ -74,13 +74,17 @@ describe("explain stream", () => {
     }
   })
 
-  it("does not invent an explainer when the shelf and the model are both absent", async () => {
-    const previous = process.env.LLM_API_KEY
-    delete process.env.LLM_API_KEY
+  it("suggests spellings when nothing matches and no model is configured", async () => {
     const events = []
-    for await (const event of explain("What is photosynthesis?")) events.push(event)
+    for await (const event of explain("zzzzqqqxx", {
+      llm: null,
+      lookup: async () => ({ entry: null, suggestions: ["quiz"] }),
+    })) events.push(event)
     expect(events).toHaveLength(1)
     expect(events[0].event).toBe("error")
-    if (previous) process.env.LLM_API_KEY = previous
+    if (events[0].event === "error") {
+      expect(events[0].data.hint).toBe("spelling")
+      expect(events[0].data.suggestions).toEqual(["quiz"])
+    }
   })
 })

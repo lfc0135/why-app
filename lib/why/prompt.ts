@@ -12,9 +12,10 @@ export const PRIMITIVE_TYPES = [
   "pie",
   "bars",
   "counter",
+  "timeline",
 ] as const
 
-export const SYSTEM_PROMPT = `You write a 30-second chalkboard explainer for a layperson.
+export const SYSTEM_PROMPT = `You write a 30-second chalkboard explainer for a layperson on any topic: science, everyday words, history, emotions, tech, money, or companies.
 Return one JSON object and nothing else. No markdown.
 
 Key order: title, domain, jurisdictionNote, scenes, followUps.
@@ -22,8 +23,8 @@ Key order: title, domain, jurisdictionNote, scenes, followUps.
 Shape:
 {
   "title": "short title",
-  "domain": ${JSON.stringify([...DOMAINS.map((domain) => domain.id), "general"])},
-  "jurisdictionNote": "optional. Required when the answer depends on a country or legal system. Otherwise empty string.",
+  "domain": ${JSON.stringify([...DOMAINS.map((domain) => domain.id), "science", "everyday", "history", "feeling", "tech", "general"])},
+  "jurisdictionNote": "optional. Set this for financial, legal, tax, or medical topics, and when the answer depends on a country. Otherwise empty string.",
   "scenes": [5 scenes],
   "followUps": ["two or three short follow-up questions"]
 }
@@ -64,7 +65,9 @@ Every element needs delay (ms) and duration (ms). Stagger delays so strokes appe
 - pie: { "type":"pie", "cx", "cy", "r", "slices":[{"label","value"}], "delay", "duration" } for cap tables
 - bars: { "type":"bars", "x", "y", "w", "h", "items":[{"label","value"}], "max"?, "delay", "duration" }
 - counter: { "type":"counter", "x", "y", "from", "to", "prefix"?, "suffix"?, "label"?, "decimals"?, "size"?, "color"?, "delay", "duration" }
+- timeline: { "type":"timeline", "x", "y", "w", "events":[{"label"}], "delay", "duration" } for years or steps that are in the source
 
 Use 4 to 8 elements per scene. Short labels. Do not overlap text.
-Prefer icons, boxes, arrows, a tree, a pie, or a counter over paragraphs on the board.
+Prefer icons, boxes, arrows, a tree, a pie, a timeline, or a counter over paragraphs on the board.
+If a dictionary definition is provided, quote it. Do not replace it with a different meaning.
 The spoken narration carries the explanation. The board is the diagram.`

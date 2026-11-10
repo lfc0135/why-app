@@ -40,6 +40,7 @@ export type Beat =
   | { kind: "pie"; slices: { label: string; value: number }[] }
   | { kind: "tree"; root: string; children: string[] }
   | { kind: "bars"; items: { label: string; value: number }[]; max?: number }
+  | { kind: "timeline"; events: string[] }
 
 const HEIGHT: Record<Beat["kind"], number> = {
   title: 72,
@@ -53,6 +54,7 @@ const HEIGHT: Record<Beat["kind"], number> = {
   pie: 268,
   tree: 236,
   bars: 230,
+  timeline: 150,
 }
 
 const TOP = 108
@@ -297,6 +299,20 @@ function renderBeat(beat: Beat, top: number, height: number): Primitive[] {
         children: beat.children,
         x: 500,
         y: top + 10,
+        ...base,
+      },
+    ]
+  }
+
+  if (beat.kind === "timeline") {
+    return [
+      {
+        type: "timeline",
+        x: 120,
+        y: top + height * 0.45,
+        w: 760,
+        events: beat.events.slice(0, 4).map((label) => ({ label: label.slice(0, 18) })),
+        color: "yellow",
         ...base,
       },
     ]

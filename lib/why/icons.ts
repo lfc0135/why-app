@@ -117,6 +117,131 @@ export function iconStrokes(name: IconName, seed: string): string[] {
         wobbleArc(78, 58, 14, Math.PI, Math.PI * 2, `${seed}-pan2`, 0.8),
         wobbleLine(38, 86, 62, 86, `${seed}-base`, 0.6),
       ]
+    case "sun":
+      return [
+        wobbleCircle(50, 50, 16, `${seed}-c`, 1),
+        wobbleLine(50, 14, 50, 26, `${seed}-u`, 0.6),
+        wobbleLine(50, 74, 50, 86, `${seed}-d`, 0.6),
+        wobbleLine(14, 50, 26, 50, `${seed}-l`, 0.6),
+        wobbleLine(74, 50, 86, 50, `${seed}-r`, 0.6),
+        wobbleLine(24, 24, 34, 34, `${seed}-a`, 0.5),
+        wobbleLine(66, 66, 76, 76, `${seed}-b`, 0.5),
+        wobbleLine(76, 24, 66, 34, `${seed}-e`, 0.5),
+        wobbleLine(34, 66, 24, 76, `${seed}-f`, 0.5),
+      ]
+    case "leaf":
+      return [
+        wobbleEllipse(50, 48, 22, 30, `${seed}-e`, 1),
+        wobbleLine(50, 78, 50, 22, `${seed}-v`, 0.7),
+        wobbleLine(50, 48, 32, 36, `${seed}-l`, 0.5),
+        wobbleLine(50, 48, 68, 36, `${seed}-r`, 0.5),
+      ]
+    case "drop":
+      return [
+        wobbleArc(50, 54, 22, Math.PI * 0.15, Math.PI * 0.85, `${seed}-b`, 1),
+        wobbleLine(30, 48, 50, 16, `${seed}-l`, 0.8),
+        wobbleLine(70, 48, 50, 16, `${seed}-r`, 0.8),
+      ]
+    case "heart":
+      return [
+        wobbleArc(36, 40, 14, Math.PI, Math.PI * 2.15, `${seed}-l`, 0.8),
+        wobbleArc(64, 40, 14, Math.PI * 0.85, Math.PI * 2, `${seed}-r`, 0.8),
+        wobbleLine(22, 44, 50, 80, `${seed}-a`, 0.8),
+        wobbleLine(78, 44, 50, 80, `${seed}-b`, 0.8),
+      ]
+    case "book":
+      return [
+        wobbleRect(18, 22, 64, 56, `${seed}-p`, 1),
+        wobbleLine(50, 22, 50, 78, `${seed}-s`, 0.6),
+        wobbleLine(28, 38, 42, 38, `${seed}-l`, 0.4),
+        wobbleLine(58, 38, 74, 38, `${seed}-r`, 0.4),
+      ]
+    case "clock":
+      return [
+        wobbleCircle(50, 50, 30, `${seed}-c`, 1),
+        wobbleLine(50, 50, 50, 28, `${seed}-h`, 0.6),
+        wobbleLine(50, 50, 68, 58, `${seed}-m`, 0.6),
+      ]
+    case "mountain":
+      return [
+        wobbleLine(10, 78, 38, 28, `${seed}-a`, 0.8),
+        wobbleLine(38, 28, 62, 78, `${seed}-b`, 0.8),
+        wobbleLine(46, 78, 70, 40, `${seed}-c`, 0.8),
+        wobbleLine(70, 40, 92, 78, `${seed}-d`, 0.8),
+      ]
+    case "flame":
+      return [
+        wobbleLine(50, 86, 28, 48, `${seed}-l`, 0.9),
+        wobbleLine(28, 48, 50, 12, `${seed}-t`, 0.9),
+        wobbleLine(50, 12, 74, 50, `${seed}-r`, 0.9),
+        wobbleLine(74, 50, 50, 86, `${seed}-b`, 0.9),
+        wobbleLine(50, 78, 42, 52, `${seed}-i`, 0.6),
+      ]
+    case "cloud":
+      return [
+        wobbleCircle(38, 58, 16, `${seed}-a`, 0.8),
+        wobbleCircle(58, 50, 18, `${seed}-b`, 0.8),
+        wobbleCircle(74, 60, 12, `${seed}-c`, 0.7),
+        wobbleLine(24, 68, 84, 68, `${seed}-d`, 0.6),
+      ]
+    case "star":
+      return [
+        wobbleLine(50, 14, 58, 40, `${seed}-a`, 0.6),
+        wobbleLine(58, 40, 86, 42, `${seed}-b`, 0.6),
+        wobbleLine(86, 42, 64, 58, `${seed}-c`, 0.6),
+        wobbleLine(64, 58, 72, 86, `${seed}-d`, 0.6),
+        wobbleLine(72, 86, 50, 68, `${seed}-e`, 0.6),
+        wobbleLine(50, 68, 28, 86, `${seed}-f`, 0.6),
+        wobbleLine(28, 86, 36, 58, `${seed}-g`, 0.6),
+        wobbleLine(36, 58, 14, 42, `${seed}-h`, 0.6),
+        wobbleLine(14, 42, 42, 40, `${seed}-i`, 0.6),
+        wobbleLine(42, 40, 50, 14, `${seed}-j`, 0.6),
+      ]
+    case "brain":
+      return [
+        wobbleEllipse(50, 50, 26, 28, `${seed}-o`, 1),
+        wobbleLine(50, 26, 50, 76, `${seed}-m`, 0.6),
+        wobbleLine(30, 42, 48, 48, `${seed}-a`, 0.5),
+        wobbleLine(52, 40, 72, 46, `${seed}-b`, 0.5),
+        wobbleLine(32, 60, 48, 58, `${seed}-c`, 0.5),
+      ]
+    case "eye":
+      return [
+        wobbleEllipse(50, 50, 32, 16, `${seed}-e`, 0.9),
+        wobbleCircle(50, 50, 8, `${seed}-p`, 0.6),
+      ]
+    case "house":
+      return [
+        wobbleLine(18, 48, 50, 18, `${seed}-r1`, 0.8),
+        wobbleLine(50, 18, 82, 48, `${seed}-r2`, 0.8),
+        wobbleRect(28, 48, 44, 34, `${seed}-b`, 0.9),
+        wobbleRect(44, 62, 12, 20, `${seed}-d`, 0.5),
+      ]
+    case "flower":
+      return [
+        wobbleCircle(50, 50, 8, `${seed}-c`, 0.6),
+        wobbleCircle(50, 28, 10, `${seed}-u`, 0.6),
+        wobbleCircle(50, 72, 10, `${seed}-d`, 0.6),
+        wobbleCircle(28, 50, 10, `${seed}-l`, 0.6),
+        wobbleCircle(72, 50, 10, `${seed}-r`, 0.6),
+      ]
+    case "bolt":
+      return [
+        wobbleLine(58, 12, 32, 48, `${seed}-a`, 0.7),
+        wobbleLine(32, 48, 52, 48, `${seed}-b`, 0.6),
+        wobbleLine(52, 48, 36, 88, `${seed}-c`, 0.7),
+      ]
+    case "wave":
+      return [
+        wobbleLine(12, 40, 30, 28, `${seed}-a`, 0.7),
+        wobbleLine(30, 28, 50, 48, `${seed}-b`, 0.7),
+        wobbleLine(50, 48, 70, 28, `${seed}-c`, 0.7),
+        wobbleLine(70, 28, 88, 44, `${seed}-d`, 0.7),
+        wobbleLine(12, 64, 30, 52, `${seed}-e`, 0.6),
+        wobbleLine(30, 52, 50, 72, `${seed}-f`, 0.6),
+        wobbleLine(50, 72, 70, 52, `${seed}-g`, 0.6),
+        wobbleLine(70, 52, 88, 66, `${seed}-h`, 0.6),
+      ]
     default: {
       const _never: never = name
       return _never

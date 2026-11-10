@@ -2,7 +2,15 @@
 
 Why answers a short question with a thirty-second chalkboard explainer: a hand-drawn diagram, a spoken line, and captions. It is for someone who just heard a term and wants the plain version.
 
-The first shelf covers two domains:
+Type any word. Checked fintech and company explainers are written by hand and play immediately. Every other word is looked up, with no API key, in a free dictionary and then an encyclopedia:
+
+1. [dictionaryapi.dev](https://dictionaryapi.dev/) when it answers.
+2. The Wiktionary definition API.
+3. A Wikipedia summary.
+
+The chalk script quotes that source. It does not invent a definition. The transcript names the source. A missing word gets spelling suggestions. With `LLM_API_KEY` set, the model still writes the scene plan, grounded in that definition when one was found.
+
+The hand-checked shelf covers two domains:
 
 - **Fintech & crypto** — liquidity pools, APR vs APY, stablecoins, KYC, and the words around them.
 - **Business structuring** — holding companies, LLCs, UAE mainland vs free zone, cap tables, vesting, and the words around them.
@@ -16,7 +24,7 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Try **What is a liquidity pool?** or **What is a holding company?**
+Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Try **photosynthesis**, **nostalgia**, **What is a liquidity pool?**, or any other word.
 
 ```bash
 npm test

@@ -1,7 +1,7 @@
 "use client"
 
 import { useId } from "react"
-import { CHALK_HEX, FONT_PX, arrowHead, curvedArrow, drawProgress, wobbleLine, wobbleRect } from "@/lib/why/geometry"
+import { CHALK_HEX, FONT_PX, arrowHead, curvedArrow, drawProgress, wobbleCircle, wobbleLine, wobbleRect } from "@/lib/why/geometry"
 import { iconStrokes } from "@/lib/why/icons"
 import type { ChalkColor, Primitive, Scene } from "@/lib/why/schema"
 
@@ -246,7 +246,53 @@ function PrimitiveView({
   if (element.type === "pie") {
     return <PieView element={element} progress={progress} seed={seed} />
   }
+  if (element.type === "timeline") {
+    return <TimelineView element={element} progress={progress} color={color} seed={seed} />
+  }
   return <BarsView element={element} progress={progress} seed={seed} />
+}
+
+function TimelineView({
+  element,
+  progress,
+  color,
+  seed,
+}: {
+  element: Extract<Primitive, { type: "timeline" }>
+  progress: number
+  color: string
+  seed: string
+}) {
+  const count = element.events.length
+  return (
+    <g>
+      <ChalkPath
+        d={wobbleLine(element.x, element.y, element.x + element.w, element.y, `${seed}-line`, 1.4)}
+        progress={progress}
+        color={color}
+      />
+      {element.events.map((event, index) => {
+        const x = element.x + ((index + 0.5) * element.w) / count
+        return (
+          <g key={event.label}>
+            <ChalkPath d={wobbleCircle(x, element.y, 7, `${seed}-d${index}`, 0.6)} progress={progress} color={color} width={2.6} />
+            {progress > 0.35 ? (
+              <text
+                x={x}
+                y={element.y + 36}
+                textAnchor="middle"
+                fill={color}
+                fontSize={28}
+                className="chalk-label"
+              >
+                {event.label}
+              </text>
+            ) : null}
+          </g>
+        )
+      })}
+    </g>
+  )
 }
 
 function FlowView({

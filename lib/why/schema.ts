@@ -15,6 +15,22 @@ export const ICON_NAMES = [
   "cup",
   "key",
   "scales",
+  "sun",
+  "leaf",
+  "drop",
+  "heart",
+  "book",
+  "clock",
+  "mountain",
+  "flame",
+  "cloud",
+  "star",
+  "brain",
+  "eye",
+  "house",
+  "flower",
+  "bolt",
+  "wave",
 ] as const
 
 export const CHALK_COLORS = [
@@ -189,6 +205,20 @@ const barsSchema = z.object({
   duration: drawSchema,
 })
 
+const timelineSchema = z.object({
+  type: z.literal("timeline"),
+  x: z.number().min(0).max(1000),
+  y: z.number().min(0).max(562),
+  w: z.number().min(160).max(920),
+  events: z
+    .array(z.object({ label: z.string().min(1).max(18) }))
+    .min(2)
+    .max(4),
+  color: colorSchema.optional(),
+  delay: delaySchema,
+  duration: drawSchema,
+})
+
 const counterSchema = z.object({
   type: z.literal("counter"),
   x: z.number().min(0).max(1000),
@@ -216,6 +246,7 @@ export const primitiveSchema = z.discriminatedUnion("type", [
   pieSchema,
   barsSchema,
   counterSchema,
+  timelineSchema,
 ])
 
 export const sceneSchema = z.object({

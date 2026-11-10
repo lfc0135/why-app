@@ -58,6 +58,28 @@ export const KICKERS = {
   takeaway: "Remember",
 } as const
 
+const TOPIC_LABELS: Record<string, string> = {
+  fintech: "Fintech & crypto",
+  business: "Business structuring",
+  science: "Science",
+  everyday: "Everyday",
+  history: "History",
+  feeling: "Feelings",
+  tech: "Tech",
+  general: "General",
+}
+
+export const ANY_WORD_PROMPTS = [
+  "photosynthesis",
+  "nostalgia",
+  "gravity",
+  "democracy",
+  "volcano",
+  "serendipity",
+  ASK.pool,
+  ASK.holding,
+] as const
+
 export function domainLabel(id: string): string {
-  return DOMAINS.find((domain) => domain.id === id)?.label ?? "General"
+  return TOPIC_LABELS[id] ?? DOMAINS.find((domain) => domain.id === id)?.label ?? "General"
 }

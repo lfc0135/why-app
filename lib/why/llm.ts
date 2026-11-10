@@ -18,10 +18,11 @@ export async function* streamChat(
   config: LlmConfig,
   question: string,
   signal?: AbortSignal,
+  grounding?: string,
 ): AsyncGenerator<string> {
-  let response = await complete(config, question, signal, true)
+  let response = await complete(config, question, signal, true, grounding)
   if (response.status === 400) {
-    response = await complete(config, question, signal, false)
+    response = await complete(config, question, signal, false, grounding)
   }
   if (!response.ok || !response.body) {
     throw new Error(`Model request failed (${response.status})`)
@@ -50,7 +51,11 @@ async function complete(
   question: string,
   signal: AbortSignal | undefined,
   jsonMode: boolean,
+  grounding?: string,
 ): Promise<Response> {
+  const sourced = grounding
+    ? `${question}\n\nGround the explainer in this source when it is relevant. Do not contradict it, and do not invent a different definition.\n${grounding}`
+    : question
   return fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     signal,
@@ -64,7 +69,7 @@ async function complete(
       stream: true,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: question },
+        { role: "user", content: sourced },
       ],
       ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
