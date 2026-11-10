@@ -1,7 +1,15 @@
+import {
+  assertEfficientModel,
+  releaseCall,
+  reserveCall,
+  settleCall,
+} from "@/lib/why/ledger"
+import { costMicroUsd, estimateTokens, type UsageTokens } from "@/lib/why/pricing"
 import { SYSTEM_PROMPT } from "@/lib/why/prompt"
 
 export const DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5"
 export const ANTHROPIC_VERSION = "2023-06-01"
+export const CLAUDE_MAX_OUTPUT_TOKENS = 2200
 
 export type LlmProvider = "anthropic" | "openai"
 
@@ -46,12 +54,24 @@ export async function* streamChat(
   question: string,
   signal?: AbortSignal,
   grounding?: string,
+  term?: string,
 ): AsyncGenerator<string> {
   if (config.provider === "anthropic") {
-    yield* streamAnthropic(config, question, signal, grounding)
+    yield* streamAnthropic(config, question, signal, grounding, term)
     return
   }
   yield* streamOpenAI(config, question, signal, grounding)
+}
+
+export function previewMaxCostMicro(config: LlmConfig, question: string, grounding?: string): number {
+  const request = anthropicRequest(config, question, grounding)
+  const inputTokens = estimateTokens(String(request.init.body ?? ""))
+  return costMicroUsd(config.model, {
+    inputTokens,
+    outputTokens: CLAUDE_MAX_OUTPUT_TOKENS,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+  })
 }
 
 export function anthropicRequest(config: LlmConfig, question: string, grounding?: string): {
@@ -69,7 +89,7 @@ export function anthropicRequest(config: LlmConfig, question: string, grounding?
       },
       body: JSON.stringify({
         model: config.model,
-        max_tokens: 4096,
+        max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
         temperature: 0.2,
         stream: true,
         system: SYSTEM_PROMPT,
@@ -79,26 +99,65 @@ export function anthropicRequest(config: LlmConfig, question: string, grounding?
   }
 }
 
+export function readAnthropicUsage(event: string): Partial<UsageTokens> | null {
+  const json = readAnthropicJson(event)
+  if (!json) return null
+  const usage =
+    json.type === "message_start"
+      ? json.message?.usage
+      : json.type === "message_delta"
+        ? json.usage
+        : undefined
+  if (!usage) return null
+  const partial: Partial<UsageTokens> = {}
+  if (typeof usage.input_tokens === "number") partial.inputTokens = usage.input_tokens
+  if (typeof usage.output_tokens === "number") partial.outputTokens = usage.output_tokens
+  if (typeof usage.cache_creation_input_tokens === "number") {
+    partial.cacheWriteTokens = usage.cache_creation_input_tokens
+  }
+  if (typeof usage.cache_read_input_tokens === "number") partial.cacheReadTokens = usage.cache_read_input_tokens
+  return partial
+}
+
 /** Pull spoken text out of one Anthropic SSE event. Ignores thinking and tool deltas. */
 export function readAnthropicEvent(event: string): string {
+  const json = readAnthropicJson(event)
+  if (!json) return ""
+  if (json.type === "content_block_delta" && json.delta?.type === "text_delta") {
+    return json.delta.text ?? ""
+  }
+  return ""
+}
+
+function readAnthropicJson(event: string): {
+  type?: string
+  delta?: { type?: string; text?: string }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
+  message?: {
+    usage?: {
+      input_tokens?: number
+      output_tokens?: number
+      cache_creation_input_tokens?: number
+      cache_read_input_tokens?: number
+    }
+  }
+} | null {
   const data = event
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).trim())
     .join("")
-  if (!data || data === "[DONE]") return ""
+  if (!data || data === "[DONE]") return null
   try {
-    const json = JSON.parse(data) as {
-      type?: string
-      delta?: { type?: string; text?: string }
-    }
-    if (json.type === "content_block_delta" && json.delta?.type === "text_delta") {
-      return json.delta.text ?? ""
-    }
-    return ""
+    return JSON.parse(data) as ReturnType<typeof readAnthropicJson>
   } catch {
-    return ""
+    return null
   }
 }
 
@@ -107,13 +166,85 @@ async function* streamAnthropic(
   question: string,
   signal: AbortSignal | undefined,
   grounding?: string,
+  term?: string,
 ): AsyncGenerator<string> {
-  const request = anthropicRequest(config, question, grounding)
-  const response = await fetch(request.url, { ...request.init, signal })
-  if (!response.ok || !response.body) {
-    throw new Error(`Model request failed (${response.status})`)
+  assertEfficientModel(config.model)
+  const maxCostMicro = previewMaxCostMicro(config, question, grounding)
+  const hold = await reserveCall({
+    model: config.model,
+    term: (term ?? question).slice(0, 120),
+    maxCostMicro,
+  })
+  const usage: UsageTokens = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
   }
-  yield* readSseText(response.body, readAnthropicEvent)
+  let sawUsage = false
+  let accepted = false
+  try {
+    const request = anthropicRequest(config, question, grounding)
+    const response = await fetch(request.url, { ...request.init, signal })
+    if (!response.ok || !response.body) {
+      throw new Error(`Model request failed (${response.status})`)
+    }
+    accepted = true
+    yield* readAnthropicStream(response.body, usage, () => {
+      sawUsage = true
+    })
+  } finally {
+    if (accepted) {
+      const estimated = !sawUsage
+      await settleCall(hold.id, config.model, estimated ? maxUsage(config, question, grounding) : usage, estimated)
+    } else {
+      await releaseCall(hold.id)
+    }
+  }
+}
+
+function maxUsage(config: LlmConfig, question: string, grounding?: string): UsageTokens {
+  const request = anthropicRequest(config, question, grounding)
+  return {
+    inputTokens: estimateTokens(String(request.init.body ?? "")),
+    outputTokens: CLAUDE_MAX_OUTPUT_TOKENS,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+  }
+}
+
+async function* readAnthropicStream(
+  body: ReadableStream<Uint8Array>,
+  usage: UsageTokens,
+  onUsage: () => void,
+): AsyncGenerator<string> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  const take = (event: string) => {
+    const reported = readAnthropicUsage(event)
+    if (reported) {
+      onUsage()
+      if (reported.inputTokens != null) usage.inputTokens = reported.inputTokens
+      if (reported.outputTokens != null) usage.outputTokens = reported.outputTokens
+      if (reported.cacheWriteTokens != null) usage.cacheWriteTokens = reported.cacheWriteTokens
+      if (reported.cacheReadTokens != null) usage.cacheReadTokens = reported.cacheReadTokens
+    }
+    return readAnthropicEvent(event)
+  }
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split("\n\n")
+    buffer = events.pop() ?? ""
+    for (const event of events) {
+      const token = take(event)
+      if (token) yield token
+    }
+  }
+  const tail = take(buffer)
+  if (tail) yield tail
 }
 
 async function* streamOpenAI(

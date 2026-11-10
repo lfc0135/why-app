@@ -1,8 +1,10 @@
 import { ASK, DISCLAIMER, FEATURED_QUESTIONS } from "@/lib/why/content"
 import { lookupTerm, planFromGlossary, sourceLine, type LookupResult } from "@/lib/why/glossary"
 import { refusalFor } from "@/lib/why/guard"
+import { BudgetExceededError } from "@/lib/why/ledger"
 import { llmConfig, streamChat, type LlmConfig } from "@/lib/why/llm"
 import { buildTranscript, CACHE_SCORE, matchSeed } from "@/lib/why/match"
+import { readCachedScript, scriptCacheKey, writeCachedScript, type SavedScript } from "@/lib/why/script-cache"
 import { SceneStreamParser } from "@/lib/why/stream"
 import type { Scene, ScenePlan } from "@/lib/why/schema"
 
@@ -15,6 +17,7 @@ export type ExplainEvent =
         domain: string
         jurisdictionNote?: string
         fromCache: boolean
+        cache?: "script"
         id?: string
         source?: string
       }
@@ -119,6 +122,13 @@ async function* fromPlan(plan: ScenePlan, source?: string): AsyncGenerator<Expla
 }
 
 async function* fromLlm(question: string, config: LlmConfig, found?: LookupResult): AsyncGenerator<ExplainEvent> {
+  if (config.provider === "anthropic") {
+    const saved = await readCachedScript(scriptCacheKey(question))
+    if (saved) {
+      yield* fromSaved(saved)
+      return
+    }
+  }
   const grounding = found?.entry
     ? `Source: ${sourceLine(found.entry)}\nDefinition: ${found.entry.definition}\nExample: ${found.entry.example ?? "none given"}`
     : found?.suggestions.length
@@ -142,7 +152,7 @@ async function* fromLlm(question: string, config: LlmConfig, found?: LookupResul
   }
 
   try {
-    for await (const chunk of streamChat(config, question, undefined, grounding)) {
+    for await (const chunk of streamChat(config, question, undefined, grounding, scriptCacheKey(question))) {
       for (const parsed of parser.push(chunk)) {
         if (parsed.type === "meta") {
           title = parsed.title
@@ -158,9 +168,16 @@ async function* fromLlm(question: string, config: LlmConfig, found?: LookupResul
         }
       }
     }
-  } catch {
+  } catch (err) {
     if (!metaSent && found?.entry) {
       yield* fromPlan(planFromGlossary(found.entry, question), sourceLine(found.entry))
+      return
+    }
+    if (err instanceof BudgetExceededError) {
+      yield error(
+        `Claude is paused. The $${err.status.budgetUsd.toFixed(2)} budget is used up.`,
+        suggestions,
+      )
       return
     }
     yield error("The sketching model did not answer. A dictionary chalk drawing may still work.", suggestions)
@@ -179,6 +196,20 @@ async function* fromLlm(question: string, config: LlmConfig, found?: LookupResul
   const usableFollowUps =
     followUps.length >= 2 ? followUps.slice(0, 3) : [ASK.pool, ASK.holding, ASK.apr]
   const source = found?.entry ? sourceLine(found.entry) : undefined
+  if (config.provider === "anthropic" && scenes.length >= 4) {
+    await writeCachedScript({
+      key: scriptCacheKey(question),
+      question,
+      model: config.model,
+      title,
+      domain,
+      jurisdictionNote,
+      scenes,
+      followUps: usableFollowUps,
+      source,
+      savedAt: new Date().toISOString(),
+    })
+  }
   const spoken = buildTranscript(scenes, jurisdictionNote)
   yield {
     event: "done",
@@ -188,6 +219,35 @@ async function* fromLlm(question: string, config: LlmConfig, found?: LookupResul
       disclaimer: jurisdictionNote ?? DISCLAIMER,
       jurisdictionNote,
       source,
+    },
+  }
+}
+
+async function* fromSaved(script: SavedScript): AsyncGenerator<ExplainEvent> {
+  yield {
+    event: "meta",
+    data: {
+      question: script.question,
+      title: script.title,
+      domain: script.domain,
+      jurisdictionNote: script.jurisdictionNote,
+      fromCache: true,
+      cache: "script",
+      source: script.source,
+    },
+  }
+  for (let index = 0; index < script.scenes.length; index += 1) {
+    yield { event: "scene", data: { ...script.scenes[index], index } }
+  }
+  const spoken = buildTranscript(script.scenes, script.jurisdictionNote)
+  yield {
+    event: "done",
+    data: {
+      followUps: script.followUps,
+      transcript: script.source ? `${spoken} Source: ${script.source}.` : spoken,
+      disclaimer: script.jurisdictionNote ?? DISCLAIMER,
+      jurisdictionNote: script.jurisdictionNote,
+      source: script.source,
     },
   }
 }

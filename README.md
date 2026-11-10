@@ -52,7 +52,9 @@ Copy `.env.example` to `.env.local`. Leave the keys blank to use the checked she
 | --- | --- |
 | `LLM_PROVIDER` | `anthropic` (default) or `openai`. |
 | `ANTHROPIC_API_KEY` | Claude key for the native Messages API. Blank skips the model. Never exposed to the browser. |
-| `LLM_MODEL` | Claude id, default `claude-haiku-5-5`. For `openai`, set this to that provider's model. |
+| `LLM_MODEL` | Claude id, default `claude-haiku-5-5`. Haiku and Sonnet only. |
+| `CLAUDE_BUDGET_USD` | Lifetime Claude ceiling. Default `$20`. Values above `$20` are clamped. |
+| `CLAUDE_RUN_CAP_USD` | Per-run cap for the smoke script. Default `$2`. |
 | `LLM_API_KEY` | OpenAI-compatible key. Used only when `LLM_PROVIDER=openai`. |
 | `LLM_BASE_URL` | OpenAI-compatible base URL. Defaults to `https://api.openai.com/v1`. |
 | `TTS_PROVIDER` | `openai`, `elevenlabs`, or blank for the browser voice. |
@@ -60,6 +62,24 @@ Copy `.env.example` to `.env.local`. Leave the keys blank to use the checked she
 | `TTS_BASE_URL`, `TTS_MODEL`, `TTS_VOICE` | Provider-specific. ElevenLabs needs `TTS_VOICE`. |
 
 No keys are hardcoded.
+
+## Smoke test with your Claude key
+
+The key stays on your machine. Export it in the shell. Do not put it in a file that gets committed. `.env.example` lists the variable and leaves it blank.
+
+```bash
+export ANTHROPIC_API_KEY="your key"
+export LLM_MODEL="claude-haiku-5-5"   # or claude-sonnet-5-5
+npm run smoke:claude -- "photosynthesis" "private credit"
+```
+
+That writes a script JSON and an MP4 per term under `artifacts/smoke/`. A repeated term is read from `data/script-cache` and does not call Claude. The run stops before a call that would pass `CLAUDE_RUN_CAP_USD` (default `$2`). Every Claude call is priced from Anthropic's published token rates and appended to `data/claude-ledger.json`. A call that would push the lifetime total past `CLAUDE_BUDGET_USD` (default `$20`, and never higher) is refused before it is sent.
+
+```bash
+npm run claude:status
+```
+
+`GET /api/claude/budget` returns the same spend, remaining budget, and recent calls. It does not return the key. Both `data/` and `artifacts/` are gitignored.
 
 ## Limits
 

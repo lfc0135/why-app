@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   ANTHROPIC_VERSION,
@@ -9,7 +12,7 @@ import {
 } from "@/lib/why/llm"
 import { publicConfig } from "@/lib/why/tts"
 
-const ENV_KEYS = ["LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "TTS_PROVIDER", "TTS_API_KEY"] as const
+const ENV_KEYS = ["LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "TTS_PROVIDER", "TTS_API_KEY", "CLAUDE_BUDGET_USD", "CLAUDE_LEDGER_PATH", "CLAUDE_CACHE_DIR", "CLAUDE_RUN_CAP_USD"] as const
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -100,11 +103,13 @@ describe("Anthropic Messages stream", () => {
       expect(headers.get("anthropic-version")).toBe(ANTHROPIC_VERSION)
       const body = JSON.parse(String(init.body)) as {
         model: string
+        max_tokens: number
         stream: boolean
         system: string
         messages: { role: string; content: string }[]
       }
       expect(body.model).toBe("claude-haiku-5-5")
+      expect(body.max_tokens).toBe(2200)
       expect(body.stream).toBe(true)
       expect(body.system.toLowerCase()).toContain("chalkboard")
       expect(body.messages[0]?.role).toBe("user")
@@ -113,6 +118,9 @@ describe("Anthropic Messages stream", () => {
       return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })
     })
     vi.stubGlobal("fetch", fetchMock)
+    const dir = await mkdtemp(path.join(tmpdir(), "why-anthropic-"))
+    process.env.CLAUDE_LEDGER_PATH = path.join(dir, "ledger.json")
+    process.env.CLAUDE_CACHE_DIR = path.join(dir, "cache")
 
     const config = {
       provider: "anthropic" as const,
@@ -125,8 +133,12 @@ describe("Anthropic Messages stream", () => {
     expect(JSON.stringify(built.init.headers)).toContain("test-key")
 
     const chunks: string[] = []
-    for await (const chunk of streamChat(config, "photosynthesis", undefined, "Source: Wiktionary")) {
-      chunks.push(chunk)
+    try {
+      for await (const chunk of streamChat(config, "photosynthesis", undefined, "Source: Wiktionary")) {
+        chunks.push(chunk)
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true })
     }
     expect(chunks.join("")).toBe('{"title":"Photosynthesis"}')
     expect(fetchMock).toHaveBeenCalledOnce()

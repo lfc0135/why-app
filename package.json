@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 43123",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "claude:status": "tsx scripts/claude-status.ts",
+    "smoke:claude": "bash scripts/smoke_claude.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -29,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   }

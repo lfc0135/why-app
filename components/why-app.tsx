@@ -27,6 +27,7 @@ type Session = {
   jurisdictionNote?: string
   followUps: string[]
   fromCache: boolean
+  saved?: boolean
   askedAt: number
   error?: string
   errorHint?: "spelling" | "refused" | "invalid"
@@ -167,7 +168,7 @@ export function WhyApp() {
       for await (const item of readSse(response)) {
         if (runRef.current !== runId) return
         if (item.event === "meta") {
-          const data = item.data as Session
+          const data = item.data as Session & { cache?: string }
           setSession((current) =>
             current
               ? {
@@ -176,6 +177,7 @@ export function WhyApp() {
                   domain: data.domain,
                   jurisdictionNote: data.jurisdictionNote,
                   fromCache: Boolean(data.fromCache),
+                  saved: data.cache === "script" || Boolean(current.saved),
                   source: data.source ?? current.source,
                 }
               : current,
@@ -504,7 +506,8 @@ export function WhyApp() {
         </Button>
         {ttff != null ? (
           <p className="font-hand text-base text-[#f6f1e4]/75" data-testid="ttff" data-ttff={ttff}>
-            First chalk in {formatMs(ttff)} · {session?.fromCache ? "checked shelf" : "sketched live"}
+            First chalk in {formatMs(ttff)} ·{" "}
+            {session?.saved ? "saved sketch" : session?.fromCache ? "checked shelf" : "sketched live"}
           </p>
         ) : null}
       </div>
