@@ -197,9 +197,12 @@ describe("Claude budget ledger", () => {
     const config = llmConfig()
     expect(config).not.toBeNull()
     const estimate = previewMaxCostMicro(config!, "alpha")
+    // Cap must allow one reserved call (estimate) but not a second after the
+    // first call settles for less than the reserve. A 1.2x multiplier is too
+    // loose once the output cap is 4096, because actual usage is far below it.
     const report = await runSmoke(["alpha", "beta"], {
       outDir: path.join(dir, "out"),
-      runCapUsd: microToUsd(Math.ceil(estimate * 1.2)),
+      runCapUsd: microToUsd(estimate + 1),
       renderVideo: false,
       lookup: async () => ({ entry: null, suggestions: [] }),
       config,

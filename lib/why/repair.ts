@@ -1,4 +1,4 @@
-import { sceneSchema, type Scene } from "@/lib/why/schema"
+import { CHALK_COLORS, ICON_NAMES, primitiveSchema, sceneSchema, type Scene } from "@/lib/why/schema"
 
 const ROLES: Record<string, Scene["role"]> = {
   hook: "hook",
@@ -31,19 +31,51 @@ export function repairScene(raw: unknown, index: number): unknown {
   scene.narration = narration || "Here is the plain version."
   const caption = clip(scene.caption, 320)
   scene.caption = caption || scene.narration
-  scene.durationMs = clamp(num(scene.durationMs, 6000), 4000, 10000)
+  scene.durationMs = Math.round(clamp(num(scene.durationMs, 6000), 4000, 10000))
   const elements = Array.isArray(scene.elements) ? scene.elements : []
-  scene.elements = elements
+  const repaired = elements
     .slice(0, 16)
     .map((element, elementIndex) => repairElement(element, elementIndex))
     .filter((element) => element !== null)
+    .filter((element) => primitiveSchema.safeParse(element).success)
+  scene.elements =
+    repaired.length > 0
+      ? repaired
+      : [
+          {
+            type: "text",
+            text: String(scene.kicker).slice(0, 72) || "Diagram",
+            x: 500,
+            y: 280,
+            size: "lg",
+            anchor: "middle",
+            delay: 0,
+            duration: 700,
+          },
+        ]
   return scene
 }
+
+const PRIMITIVE_TYPES = new Set([
+  "text",
+  "box",
+  "arrow",
+  "line",
+  "icon",
+  "flow",
+  "tree",
+  "pie",
+  "bars",
+  "counter",
+  "timeline",
+])
+const ICON_SET = new Set<string>(ICON_NAMES)
+const COLOR_SET = new Set<string>(CHALK_COLORS)
 
 function repairElement(raw: unknown, index: number): unknown | null {
   if (!raw || typeof raw !== "object") return null
   const element = { ...(raw as Record<string, unknown>) }
-  if (typeof element.type !== "string") return null
+  if (typeof element.type !== "string" || !PRIMITIVE_TYPES.has(element.type)) return null
   element.delay = clamp(num(element.delay, index * 280), 0, 9000)
   element.duration = clamp(num(element.duration, 700), 200, 8000)
   for (const key of ["x", "x1", "x2", "cx", "w"] as const) {
@@ -52,6 +84,7 @@ function repairElement(raw: unknown, index: number): unknown | null {
   for (const key of ["y", "y1", "y2", "cy", "h"] as const) {
     if (key in element) element[key] = clamp(num(element[key], key === "h" ? 90 : 80), 0, 562)
   }
+  if (typeof element.color === "string" && !COLOR_SET.has(element.color)) delete element.color
   if (element.type === "text") {
     element.text = clip(element.text, 72)
     if (!element.text) return null
@@ -60,11 +93,23 @@ function repairElement(raw: unknown, index: number): unknown | null {
       delete element.anchor
     }
   }
+  if (element.type === "box") {
+    element.w = clamp(num(element.w, 160), 24, 920)
+    element.h = clamp(num(element.h, 90), 24, 520)
+  }
   if (element.type === "icon") {
     element.size = clamp(num(element.size, 72), 28, 180)
+    if (typeof element.name !== "string" || !ICON_SET.has(element.name)) element.name = "star"
   }
   if (element.type === "pie" && "r" in element) {
     element.r = clamp(num(element.r, 90), 48, 170)
+  }
+  if (element.type === "bars") {
+    element.w = clamp(num(element.w, 400), 120, 900)
+    element.h = clamp(num(element.h, 200), 80, 420)
+  }
+  if (element.type === "timeline") {
+    element.w = clamp(num(element.w, 400), 160, 920)
   }
   if (element.type === "counter") {
     const from = num(element.from, 0)

@@ -6,6 +6,7 @@ import {
   ANTHROPIC_VERSION,
   DEFAULT_CLAUDE_MODEL,
   anthropicRequest,
+  CLAUDE_MAX_OUTPUT_TOKENS,
   llmConfig,
   readAnthropicEvent,
   streamChat,
@@ -109,7 +110,7 @@ describe("Anthropic Messages stream", () => {
         messages: { role: string; content: string }[]
       }
       expect(body.model).toBe("claude-haiku-5-5")
-      expect(body.max_tokens).toBe(2200)
+      expect(body.max_tokens).toBe(CLAUDE_MAX_OUTPUT_TOKENS)
       expect(body.stream).toBe(true)
       expect(body.system.toLowerCase()).toContain("chalkboard")
       expect(body.messages[0]?.role).toBe("user")

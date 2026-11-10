@@ -9,7 +9,7 @@ import { SYSTEM_PROMPT } from "@/lib/why/prompt"
 
 export const DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5"
 export const ANTHROPIC_VERSION = "2023-06-01"
-export const CLAUDE_MAX_OUTPUT_TOKENS = 2200
+export const CLAUDE_MAX_OUTPUT_TOKENS = 4096
 
 export type LlmProvider = "anthropic" | "openai"
 
@@ -90,7 +90,10 @@ export function anthropicRequest(config: LlmConfig, question: string, grounding?
       body: JSON.stringify({
         model: config.model,
         max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
-        temperature: 0.2,
+        // Haiku 5.5 / Sonnet 5.5 reject non-default temperature with HTTP 400.
+        // Adaptive thinking is on by default and counts toward max_tokens, so
+        // disable it and leave the 4096-token budget for the chalkboard JSON.
+        thinking: { type: "disabled" },
         stream: true,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userContent(question, grounding) }],

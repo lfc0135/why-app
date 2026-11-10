@@ -16,7 +16,7 @@ export const PRIMITIVE_TYPES = [
 ] as const
 
 export const SYSTEM_PROMPT = `You write a 30-second chalkboard explainer for a layperson on any topic: science, everyday words, history, emotions, tech, money, or companies.
-Return one JSON object and nothing else. No markdown.
+Return one compact JSON object and nothing else. No markdown, no extra whitespace, no commentary.
 
 Key order: title, domain, jurisdictionNote, scenes, followUps.
 
@@ -25,7 +25,7 @@ Shape:
   "title": "short title",
   "domain": ${JSON.stringify([...DOMAINS.map((domain) => domain.id), "science", "everyday", "history", "feeling", "tech", "general"])},
   "jurisdictionNote": "optional. Set this for financial, legal, tax, or medical topics, and when the answer depends on a country. Otherwise empty string.",
-  "scenes": [5 scenes],
+  "scenes": [at least 4 scenes, preferably 5],
   "followUps": ["two or three short follow-up questions"]
 }
 
@@ -40,7 +40,7 @@ Each scene:
   "elements": [chalkboard primitives]
 }
 
-Roles in order: hook, analogy, mechanism, example, takeaway.
+Include at least 4 scenes; 5 is preferred, in this role order: hook, analogy, mechanism, example, takeaway.
 durationMs values must add up to between 28000 and 32000.
 All narrations together are 70 to 90 spoken words.
 Define the term in the hook. Use an everyday analogy. Show how it works. Use one concrete example and say it is an example when you invent the numbers. End with one takeaway and the main risk or limit.
