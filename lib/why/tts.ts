@@ -1,3 +1,5 @@
+import { llmConfig } from "@/lib/why/llm"
+
 export type TtsConfig = {
   provider: "openai" | "elevenlabs"
   apiKey: string
@@ -35,7 +37,7 @@ export function ttsConfig(): TtsConfig | null {
 
 export function publicConfig() {
   return {
-    llm: Boolean(process.env.LLM_API_KEY?.trim()),
+    llm: llmConfig() !== null,
     tts: ttsConfig() !== null,
   }
 }
