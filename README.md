@@ -2,11 +2,10 @@
 
 Why answers a short question with a thirty-second chalkboard explainer: a hand-drawn diagram, a spoken line, and captions. It is for someone who just heard a term and wants the plain version.
 
-Type any word. Checked fintech and company explainers are written by hand and play immediately. Every other word is looked up, with no API key, in a free dictionary and then an encyclopedia:
+Type any short phrase or question. Checked fintech and company explainers are written by hand and play immediately. Every other concept, including several words such as "private credit" or "the French Revolution", is looked up with no API key:
 
-1. [dictionaryapi.dev](https://dictionaryapi.dev/) when it answers.
-2. The Wiktionary definition API.
-3. A Wikipedia summary.
+1. A [Wikipedia summary](https://en.wikipedia.org/api/rest_v1/#/Page%20content/get_page_summary__title_) for the concept.
+2. For a single word Wikipedia does not cover, [dictionaryapi.dev](https://dictionaryapi.dev/) and then the Wiktionary definition API.
 
 The chalk script quotes that source. It does not invent a definition. The transcript names the source. A missing word gets spelling suggestions. With `ANTHROPIC_API_KEY` set (`LLM_PROVIDER=anthropic`), Claude writes the scene plan through the Messages API, grounded in that definition. `LLM_PROVIDER=openai` keeps an OpenAI-compatible endpoint as an alternative. The key stays on the server.
 

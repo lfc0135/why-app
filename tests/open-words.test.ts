@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { planFromGlossary, lookupTerm, plainText, type GlossaryEntry } from "@/lib/why/glossary"
+import { extractTerm, planFromGlossary, lookupTerm, plainText, type GlossaryEntry } from "@/lib/why/glossary"
 import { refusalFor, topicCaution } from "@/lib/why/guard"
 import { explain } from "@/lib/why/explain"
 import { scenePlanSchema } from "@/lib/why/schema"
@@ -63,6 +63,57 @@ describe("open dictionary", () => {
   it("strips markup out of a dictionary definition", () => {
     expect(plainText("<b>Courage</b> is a &amp; quality.")).toBe("Courage is a & quality.")
   })
+
+  it("treats a question or a short phrase as one concept", () => {
+    expect(extractTerm("private credit")).toBe("private credit")
+    expect(extractTerm("What is private credit?")).toBe("private credit")
+    expect(extractTerm("What's a black hole?")).toBe("black hole")
+    expect(extractTerm("the French Revolution")).toBe("French Revolution")
+    expect(extractTerm("What is the French Revolution?")).toBe("French Revolution")
+    expect(extractTerm("explain supply chain")).toBe("supply chain")
+  })
+})
+
+describe("multi-word concepts", () => {
+  it(
+    "quotes a Wikipedia summary for private credit",
+    async () => {
+      const found = await lookupTerm("What is private credit?")
+      expect(found.entry?.sourceName).toBe("Wikipedia")
+      expect(found.entry?.word.toLowerCase()).toContain("private credit")
+      expect(found.entry?.definition.toLowerCase()).toMatch(/credit|bank|lend|debt|loan/)
+      const plan = planFromGlossary(found.entry!, "What is private credit?")
+      expect(scenePlanSchema.safeParse(plan).success).toBe(true)
+      const spoken = plan.scenes.map((scene) => scene.narration).join(" ")
+      const opening = found.entry!.definition.slice(0, 40)
+      expect(spoken.includes(opening) || found.entry!.definition.startsWith(plan.scenes[0].narration.replace(/…$/, ""))).toBe(
+        true,
+      )
+      expect(plan.jurisdictionNote).toMatch(/not financial, legal, tax, or medical advice/)
+      const events = []
+      for await (const event of explain("private credit", { llm: null, lookup: async () => found })) events.push(event)
+      const done = events.find((event) => event.event === "done")
+      expect(done?.event).toBe("done")
+      if (done?.event === "done") {
+        expect(done.data.transcript).toContain("Wikipedia")
+        expect(done.data.transcript).toContain("wikipedia.org")
+      }
+    },
+    20_000,
+  )
+
+  it(
+    "resolves other short phrases on Wikipedia",
+    async () => {
+      for (const phrase of ["carry trade", "black hole", "supply chain", "the French Revolution"]) {
+        const found = await lookupTerm(phrase)
+        expect(found.entry?.sourceName, phrase).toBe("Wikipedia")
+        expect(found.entry!.definition.length, phrase).toBeGreaterThan(40)
+        expect(scenePlanSchema.safeParse(planFromGlossary(found.entry!, phrase)).success, phrase).toBe(true)
+      }
+    },
+    30_000,
+  )
 })
 
 describe("live sources for everyday words", () => {

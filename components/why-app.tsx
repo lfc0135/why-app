@@ -387,7 +387,7 @@ export function WhyApp() {
           id="question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Try photosynthesis, or any word"
+          placeholder="Try private credit, or any phrase"
           autoComplete="off"
           data-testid="ask-input"
           className="h-12 flex-1 border-white/30 bg-black/25 px-4 font-hand text-lg text-[#f6f1e4] placeholder:text-[#f6f1e4]/40"

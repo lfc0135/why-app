@@ -38,17 +38,37 @@ const PICTURES: { test: RegExp; icon: IconName; label: string }[] = [
   { test: /\bwave\b|\bsea\b|\bocean\b/i, icon: "wave", label: "wave" },
   { test: /\bpeople\b|\bperson\b|\bhuman\b|\bcitizen\b/i, icon: "person", label: "people" },
   { test: /\bvote\b|\bgovern|\bdemocra/i, icon: "scales", label: "rule" },
+  { test: /\bcredit\b|\bloan\b|\bbank\b|\bmoney\b|\binvest/i, icon: "bank", label: "credit" },
+  { test: /\btrade\b|\bmarket\b|\bprice\b|\bsupply\b/i, icon: "chart", label: "market" },
 ]
 
+/** Turn a question or a short phrase into the concept to look up. */
 export function extractTerm(input: string): string {
-  return input
+  let text = input
     .trim()
     .replace(/[?!.]+$/g, "")
-    .replace(/^(what|who|why|how)\s+(is|are|was|were|does|do|did)\s+/i, "")
-    .replace(/^(a|an|the)\s+/i, "")
-    .replace(/^(define|explain|meaning of)\s+/i, "")
-    .replace(/^(a|an|the)\s+/i, "")
+    .replace(/['’]/g, "")
+    .replace(/\s+/g, " ")
     .trim()
+  const patterns = [
+    /^(?:what|whats|who|why|how)\s+(?:is|are|was|were|does|do|did)\s+(?:a|an|the)\s+/i,
+    /^whats\s+(?:a|an|the)\s+/i,
+    /^(?:what|whats|who|why|how)\s+(?:is|are|was|were|does|do|did)\s+/i,
+    /^(?:define|explain|meaning of|tell me about)\s+(?:a|an|the)\s+/i,
+    /^(?:define|explain|meaning of|tell me about)\s+/i,
+    /^(?:a|an|the)\s+/i,
+  ]
+  for (const pattern of patterns) {
+    if (pattern.test(text)) {
+      text = text.replace(pattern, "")
+      break
+    }
+  }
+  return text.trim()
+}
+
+export function isSingleWord(term: string): boolean {
+  return term.length > 0 && !/\s/.test(term)
 }
 
 export function plainText(value: string): string {
@@ -74,14 +94,16 @@ export async function lookupTerm(raw: string, fetchImpl: typeof fetch = fetch): 
   const term = extractTerm(raw)
   if (term.length < 2 || term.length > 80) return { entry: null, suggestions: [] }
 
-  const dictionary = await fromDictionaryApi(term, fetchImpl)
-  if (dictionary) return { entry: await withRelated(dictionary, fetchImpl), suggestions: [] }
-
-  const wiktionary = await fromWiktionary(term, fetchImpl)
-  if (wiktionary) return { entry: await withRelated(wiktionary, fetchImpl), suggestions: [] }
-
   const wikipedia = await fromWikipedia(term, fetchImpl)
   if (wikipedia) return { entry: await withRelated(wikipedia, fetchImpl), suggestions: [] }
+
+  if (isSingleWord(term)) {
+    const dictionary = await fromDictionaryApi(term, fetchImpl)
+    if (dictionary) return { entry: await withRelated(dictionary, fetchImpl), suggestions: [] }
+
+    const wiktionary = await fromWiktionary(term, fetchImpl)
+    if (wiktionary) return { entry: await withRelated(wiktionary, fetchImpl), suggestions: [] }
+  }
 
   return { entry: null, suggestions: await suggestSpellings(term, fetchImpl) }
 }
@@ -106,51 +128,47 @@ export function planFromGlossary(entry: GlossaryEntry, question?: string): Scene
       : `The source lists it as ${entry.partOfSpeech ? `a ${entry.partOfSpeech.toLowerCase()}` : "one sense"}: ${clip(entry.definition, 220)}`
   const exampleNarration = entry.example
     ? clip(entry.example, 300)
-    : "This source does not include an example sentence."
+    : entry.partOfSpeech
+      ? `The source describes it as ${entry.partOfSpeech.replace(/\.$/, "")}.`
+      : clip(second ?? first, 300)
   const takeawayNarration = `That wording is from ${entry.sourceName}, not a paraphrase.`
 
   const hookBeats: Beat[] = [
     { kind: "title", text: entry.word.slice(0, 22), color: "yellow" },
-    { kind: "note", text: (entry.partOfSpeech ?? "from the source").slice(0, 40) },
+    ...quoteLines(first, 2),
   ]
   if (pictures[0]) hookBeats.push({ kind: "icons", items: [pictures[0]] })
 
   const analogyBeats: Beat[] = pictures.length
     ? [
-        { kind: "title", text: "Words in the source" },
+        { kind: "title", text: pictures.map((picture) => picture.label).join(" · ").slice(0, 28), color: "yellow" },
         { kind: "icons", items: pictures },
       ]
     : [
-        { kind: "title", text: "Nearby words" },
-        { kind: "note", text: (related[0] ?? entry.partOfSpeech ?? entry.word).slice(0, 40) },
+        { kind: "title", text: (related[0] ?? entry.word).slice(0, 22), color: "yellow" },
+        ...quoteLines(analogyNarration, 2),
       ]
 
   const mechanismBeats: Beat[] = cause
     ? [
-        { kind: "title", text: "From the wording" },
-        {
-          kind: "flow",
-          steps: [{ label: cause.from }, { label: cause.to }],
-        },
+        { kind: "title", text: `${cause.from} → ${cause.to}`.slice(0, 28), color: "yellow" },
+        { kind: "flow", steps: [{ label: cause.from }, { label: cause.to }] },
       ]
     : years.length >= 2
       ? [
-          { kind: "title", text: "Years the source names" },
+          { kind: "title", text: years.join(" · ").slice(0, 28), color: "yellow" },
           { kind: "timeline", events: years },
         ]
-      : [
-          { kind: "title", text: "The source continues" },
-          { kind: "note", text: clip(second ?? first, 72) },
-        ]
+      : [{ kind: "title", text: entry.word.slice(0, 22), color: "yellow" }, ...quoteLines(second ?? first, 3)]
 
   const exampleBeats: Beat[] = [
-    { kind: "title", text: entry.example ? "Their example" : "No sample sentence" },
-    { kind: "note", text: clip(entry.example ?? "Not in the source", 72) },
+    { kind: "title", text: entry.example ? "Their example" : entry.word.slice(0, 22), color: "yellow" },
+    ...quoteLines(entry.example ?? entry.partOfSpeech ?? second ?? first, 3),
   ]
 
   const takeawayBeats: Beat[] = [
-    { kind: "title", text: entry.word.slice(0, 22), color: "yellow" },
-    { kind: "note", text: entry.sourceName.slice(0, 40) },
+    { kind: "title", text: entry.sourceName.slice(0, 22), color: "yellow" },
+    ...quoteLines(first, 2),
   ]
 
   const followUps = followUpQuestions(entry.word, related)
@@ -249,6 +267,24 @@ function mentionedYears(definition: string): string[] {
   return [...new Set(years)].slice(0, 4)
 }
 
+function quoteLines(text: string, count: number): Beat[] {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean)
+  const lines: string[] = []
+  let current = ""
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word
+    if (next.length > 42 && current) {
+      lines.push(current)
+      current = word
+      if (lines.length === count) break
+    } else {
+      current = next
+    }
+  }
+  if (current && lines.length < count) lines.push(current.slice(0, 42))
+  return lines.filter(Boolean).map((line) => ({ kind: "note", text: line.slice(0, 42) }))
+}
+
 function clip(text: string, max: number): string {
   const clean = text.replace(/\s+/g, " ").trim()
   if (clean.length <= max) return clean
@@ -273,7 +309,8 @@ function slug(word: string): string {
 }
 
 function topicId(text: string): string {
-  if (/\b(inflat|tax|loan|stock|invest|debt|money|bank|crypto|financ)/i.test(text)) return "fintech"
+  if (/\b(crypto|stablecoin|token|blockchain)\b/i.test(text)) return "fintech"
+  if (/\b(credit|loan|bank|invest|debt|money|inflat|tax|financ)/i.test(text)) return "finance"
   if (/\b(company|law|legal|court|contract)/i.test(text)) return "business"
   if (/\b(plant|light|energy|gravity|volcano|molecule|earth|science|cell|atom)/i.test(text)) return "science"
   if (/\b(emotion|feeling|memory|love|longing)/i.test(text)) return "feeling"
@@ -343,11 +380,25 @@ async function fromWiktionary(term: string, fetchImpl: typeof fetch): Promise<Gl
 }
 
 async function fromWikipedia(term: string, fetchImpl: typeof fetch): Promise<GlossaryEntry | null> {
-  const title = term
+  const direct = await wikipediaSummary(wikiTitle(term), fetchImpl)
+  if (direct) return direct
+  const resolved = await searchWikipediaTitle(term, fetchImpl)
+  if (!resolved) return null
+  return wikipediaSummary(resolved, fetchImpl)
+}
+
+function wikiTitle(term: string): string {
+  return term
     .split(/\s+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => (part.length ? part.charAt(0).toUpperCase() + part.slice(1) : part))
     .join("_")
-  const data = await fetchJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, fetchImpl)
+}
+
+async function wikipediaSummary(title: string, fetchImpl: typeof fetch): Promise<GlossaryEntry | null> {
+  const data = await fetchJson(
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+    fetchImpl,
+  )
   if (!data || typeof data !== "object") return null
   const page = data as {
     type?: string
@@ -360,13 +411,24 @@ async function fromWikipedia(term: string, fetchImpl: typeof fetch): Promise<Glo
   const definition = plainText(page.extract ?? "")
   if (!definition || definition.length < 40) return null
   return {
-    word: page.title || term,
+    word: page.title || title.replace(/_/g, " "),
     partOfSpeech: page.description,
     definition,
     related: [],
     sourceName: "Wikipedia",
     sourceUrl: page.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
   }
+}
+
+async function searchWikipediaTitle(term: string, fetchImpl: typeof fetch): Promise<string | null> {
+  const data = await fetchJson(
+    `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(term)}&limit=1`,
+    fetchImpl,
+  )
+  if (!data || typeof data !== "object" || !("pages" in data)) return null
+  const pages = (data as { pages?: { key?: string }[] }).pages
+  const key = pages?.[0]?.key
+  return key && key !== wikiTitle(term) ? key : null
 }
 
 async function withRelated(entry: GlossaryEntry, fetchImpl: typeof fetch): Promise<GlossaryEntry> {

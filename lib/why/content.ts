@@ -60,6 +60,7 @@ export const KICKERS = {
 
 const TOPIC_LABELS: Record<string, string> = {
   fintech: "Fintech & crypto",
+  finance: "Finance",
   business: "Business structuring",
   science: "Science",
   everyday: "Everyday",
@@ -70,12 +71,12 @@ const TOPIC_LABELS: Record<string, string> = {
 }
 
 export const ANY_WORD_PROMPTS = [
+  "private credit",
   "photosynthesis",
+  "black hole",
+  "supply chain",
+  "the French Revolution",
   "nostalgia",
-  "gravity",
-  "democracy",
-  "volcano",
-  "serendipity",
   ASK.pool,
   ASK.holding,
 ] as const
